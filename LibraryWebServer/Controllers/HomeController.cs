@@ -9,7 +9,13 @@ using LibraryWebServer.Models;
 
 namespace LibraryWebServer.Controllers
 {
-  public class HomeController : Controller
+
+    //command for sql dump
+    //in cade level do 
+    // mysqldump --single-transaction -h atr.eng.utah.edu -u uID-p Library > Library.sql
+    // then do 
+    // mysql -h atr.eng.utah.edu -u uID -p TeamXXLibrary < Library.sql
+    public class HomeController : Controller
   {
     // WARNING:
     // This very simple web server is designed to be as tiny and simple as possible
@@ -33,15 +39,38 @@ namespace LibraryWebServer.Controllers
       // TODO: Fill in. Determine if login is successful or not.
       bool loginSuccessful = false;
 
+            using(Team34LibraryContext _context = new Team34LibraryContext())
+            {
+                var query =
+                    from p in _context.Patrons
+                    select new 
+                    { 
+                        PatronName = p.Name, 
+                        PatronNumber = p.CardNum 
+                    };
+
+                foreach(var q in query)
+                    if(cardnum == q.PatronNumber && name.Equals(q.PatronName))
+                    {
+                        loginSuccessful = true;
+                        break;
+                    }
+            }
       if(!loginSuccessful)
       {
-        return Json(new { success = false });
+        return Json(new 
+        { 
+            success = false 
+        });
       }
       else
       { 
         user = name;
         card = cardnum;
-        return Json(new { success = true });
+        return Json(new 
+        { 
+            success = true 
+        });
       }
     }
   
@@ -55,7 +84,10 @@ namespace LibraryWebServer.Controllers
     {
       user = "";
       card = -1;
-      return Json(new { success = true });
+      return Json(new 
+      { 
+          success = true 
+      });
     }
 
     /// <summary>
@@ -71,10 +103,25 @@ namespace LibraryWebServer.Controllers
     [HttpPost]
     public ActionResult AllTitles()
     {
-
-      // TODO: Implement
-      
-      return Json(null);
+            using (Team34LibraryContext _context = new Team34LibraryContext()) {
+                var query =
+                          from i in _context.Inventory
+                          join t in _context.Titles on i.Isbn equals t.Isbn into l
+                          from list in l.DefaultIfEmpty()
+                          select new
+                          {
+                              name =
+                              from p in _context.Patrons
+                              join co in _context.CheckedOut on p.CardNum equals co.CardNum
+                              where co.Serial == i.Serial
+                              select p.Name,
+                              title = list.Title,
+                              author = list.Author,
+                              serial = i.Serial,
+                              isbn = i.Isbn,
+                          };
+                return Json(query.ToArray());
+            }
 
     }
 
@@ -89,8 +136,22 @@ namespace LibraryWebServer.Controllers
     [HttpPost]
     public ActionResult ListMyBooks()
     {
-      // TODO: Implement
-      return Json(null);
+      using(Team34LibraryContext _context = new Team34LibraryContext())
+            {
+                var query =
+                    from i in _context.Inventory
+                    join co in _context.CheckedOut on i.Serial equals co.Serial
+                    where co.CardNum == card
+                    join t in _context.Titles on i.Isbn equals t.Isbn into l
+                    from list in l.DefaultIfEmpty()
+                    select new
+                    {
+                        title = list.Title,
+                        author = list.Author,
+                        serial = co.Serial
+                    };
+                return Json(query.ToArray());
+            }
     }
 
 
@@ -105,11 +166,21 @@ namespace LibraryWebServer.Controllers
     [HttpPost]
     public ActionResult CheckOutBook(int serial)
     {
-      // You may have to cast serial to a (uint)
-
-
-        return Json(new { success = true });
-    }
+            CheckedOut co = new CheckedOut
+            {
+                Serial = (uint)serial,
+                CardNum = (uint)card
+            };
+            using (Team34LibraryContext _context = new Team34LibraryContext())
+            {
+                _context.Add(co);
+                _context.SaveChanges();
+            }
+            return Json(new
+            {
+                success = true
+            });
+        }
 
 
     /// <summary>
@@ -122,9 +193,20 @@ namespace LibraryWebServer.Controllers
     [HttpPost]
     public ActionResult ReturnBook(int serial)
     {
-      // You may have to cast serial to a (uint)
-
-      return Json(new { success = true });
+            CheckedOut co = new CheckedOut
+            {
+                Serial = (uint)serial,
+                CardNum = (uint)card
+            };
+            using (Team34LibraryContext _context = new Team34LibraryContext())
+            {
+                _context.Remove(co);
+                _context.SaveChanges();
+            }
+            return Json(new 
+            { 
+                success = true 
+            });
     }
     
     /*******************************************/
